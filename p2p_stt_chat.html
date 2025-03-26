@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Speech-to-Text</title>
+    <style>
+        /* CSS Styles remain the same */
+        :root { /* ... CSS variables ... */ }
+        body { /* ... body styles ... */ }
+        .container { /* ... container styles ... */ }
+        h1 { /* ... h1 styles ... */ }
+        #status-indicator { /* ... status styles ... */ }
+        #listeningIndicator { /* ... indicator styles ... */ }
+        #listeningIndicator.indicator-active { /* ... active indicator styles ... */ }
+        #status { /* ... status text styles ... */ }
+        #language-select-div { /* ... language select styles ... */ }
+        #languageSelect { /* ... select styles ... */ }
+        #controls { /* ... controls container styles ... */ }
+        #controls button { /* ... button styles ... */ }
+        #startBtn { background-color: var(--success-color); }
+        #stopBtn { background-color: var(--error-color); }
+        #clearBtn { background-color: var(--info-color); }
+        #startBtn:disabled, #stopBtn:disabled, #clearBtn:disabled { /* ... disabled styles ... */ }
+        #output { /* ... output area styles ... */ }
+        #output p { /* ... paragraph styles ... */ }
+        #output p.interim { /* ... interim styles ... */ }
+        @keyframes pulse { /* ... pulse animation ... */ }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>Speech-to-Text</h1>
+
+        <div id="status-indicator">
+             <span id="listeningIndicator" class="indicator-inactive"></span>
+             <span id="status">Status: Ready</span>
+        </div>
+
+        <div id="language-select-div">
+             <label for="languageSelect">Language:</label>
+             <select id="languageSelect">
+                 <!-- Options added by JS -->
+             </select>
+        </div>
+
+        <div id="controls">
+            <button id="startBtn">Start Listening</button>
+            <button id="stopBtn" disabled>Stop Listening</button>
+            <button id="clearBtn">Clear Transcript</button>
+        </div>
+
+        <div id="output">
+            <p><em>(Transcribed text will appear here...)</em></p>
+        </div>
+    </div>
+
+    <script>
+        // JavaScript Logic Embedded Here
+
+        // --- DOM Elements ---
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const clearBtn = document.getElementById('clearBtn');
+        const statusDiv = document.getElementById('status');
+        const outputDiv = document.getElementById('output');
+        const languageSelect = document.getElementById('languageSelect');
+        const listeningIndicator = document.getElementById('listeningIndicator');
+
+        // --- Speech Recognition Setup ---
+        // This line handles Chrome, Edge, Firefox (window.SpeechRecognition)
+        // AND Safari 14.1+ (window.webkitSpeechRecognition)
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        let recognition;
+        let isRecognizing = false;
+        let currentParagraph = null;
+
+        // --- Language Options ---
+        const languages = [
+            // ... languages array remains the same ...
+            { code: 'en-US', name: 'English (US)' }, { code: 'en-GB', name: 'English (UK)' },
+            { code: 'es-ES', name: 'Español (España)' }, { code: 'es-MX', name: 'Español (México)' },
+            { code: 'fr-FR', name: 'Français' }, { code: 'de-DE', name: 'Deutsch' },
+            { code: 'it-IT', name: 'Italiano' }, { code: 'ja-JP', name: '日本語' },
+            { code: 'pt-BR', name: 'Português (Brasil)' }
+        ];
+        let selectedLanguage = languages[0].code;
+
+        // --- Populate Language Dropdown ---
+        function populateLanguages() {
+            // ... same as before ...
+            languages.forEach(lang => { const option = document.createElement('option'); option.value = lang.code; option.textContent = lang.name; languageSelect.appendChild(option); }); languageSelect.value = selectedLanguage;
+        }
+
+        // --- Initialization ---
+        window.onload = () => {
+            populateLanguages();
+            // Check if the API object exists (handling unsupported browsers)
+            if (!SpeechRecognition) {
+                statusDiv.textContent = 'Status: Error - Speech Recognition not supported.';
+                startBtn.disabled = true; stopBtn.disabled = true; clearBtn.disabled = true;
+                languageSelect.disabled = true; listeningIndicator.style.backgroundColor = 'var(--error-color)';
+                outputDiv.innerHTML = '<p><em>Sorry, your browser does not support the Web Speech API. Try Chrome, Edge, or Safari (iOS 14.1+). Firefox support may vary.</em></p>'; // Added Firefox note
+                return;
+            }
+            // Setup if supported
+            setupRecognition();
+            setStatus('Ready');
+            clearBtn.disabled = (outputDiv.textContent.trim() === '' || !!outputDiv.querySelector('em'));
+        };
+
+        // --- Setup Recognition Function ---
+        function setupRecognition() {
+            // Create instance using the detected object (standard or webkit prefixed)
+            recognition = new SpeechRecognition();
+            recognition.continuous = true;
+            recognition.interimResults = true;
+            recognition.lang = selectedLanguage;
+
+            // --- Event Handlers ---
+            // onstart, onend, onerror, onresult remain the same as the previous version
+            // They correctly use the 'recognition' object instance.
+            recognition.onstart = () => { /* ... toggle buttons, indicator, status ... */ isRecognizing = true; setStatus('Listening...'); listeningIndicator.classList.remove('indicator-inactive'); listeningIndicator.classList.add('indicator-active'); startBtn.disabled = true; stopBtn.disabled = false; clearBtn.disabled = true; languageSelect.disabled = true; console.log('Speech recognition started'); const placeholder = outputDiv.querySelector('em'); if (placeholder && outputDiv.children.length === 1 && outputDiv.firstChild === placeholder.parentElement) { outputDiv.innerHTML = ''; } currentParagraph = null; };
+            recognition.onend = () => { /* ... toggle buttons, indicator, status ... */ isRecognizing = false; setStatus('Stopped / Ready'); listeningIndicator.classList.remove('indicator-active'); listeningIndicator.classList.add('indicator-inactive'); startBtn.disabled = false; stopBtn.disabled = true; clearBtn.disabled = (outputDiv.textContent.trim() === '' || !!outputDiv.querySelector('em')); languageSelect.disabled = false; console.log('Speech recognition stopped'); finalizeCurrentParagraph(); };
+            recognition.onerror = (event) => { /* ... toggle buttons, indicator, status ... */ isRecognizing = false; console.error('Speech recognition error:', event.error, event.message); setStatus(`Error - ${event.error}`); listeningIndicator.classList.remove('indicator-active'); listeningIndicator.classList.add('indicator-inactive'); startBtn.disabled = false; stopBtn.disabled = true; clearBtn.disabled = (outputDiv.textContent.trim() === '' || !!outputDiv.querySelector('em')); languageSelect.disabled = false; finalizeCurrentParagraphOnError(event.error); };
+            recognition.onresult = (event) => { /* ... process interim/final, updateOutput ... */ let interimTranscript = ''; let finalTranscript = ''; for (let i = event.resultIndex; i < event.results.length; ++i) { if (event.results[i].isFinal) { finalTranscript += event.results[i][0].transcript; } else { interimTranscript += event.results[i][0].transcript; } } if (interimTranscript) { updateOutput(interimTranscript, true); } if (finalTranscript) { updateOutput(finalTranscript.trim(), false); currentParagraph = null; clearBtn.disabled = false; } outputDiv.scrollTop = outputDiv.scrollHeight; };
+        }
+
+
+        // --- Button and Select Controls ---
+        // startBtn, stopBtn, clearBtn, languageSelect handlers remain the same
+        startBtn.onclick = () => { /* ... set lang, start recognition ... */ if (!recognition) return; if (isRecognizing) return; try { currentParagraph = null; recognition.lang = selectedLanguage; recognition.start(); } catch (error) { console.error("Error starting speech recognition:", error); setStatus("Error starting."); } };
+        stopBtn.onclick = () => { /* ... stop recognition ... */ if (!recognition || !isRecognizing) return; try { recognition.stop(); } catch (error) { console.error("Error stopping speech recognition:", error); isRecognizing = false; setStatus("Error stopping."); startBtn.disabled = false; stopBtn.disabled = true; clearBtn.disabled = (outputDiv.textContent.trim() === '' || !!outputDiv.querySelector('em')); languageSelect.disabled = false; finalizeCurrentParagraphOnError("stop_error"); listeningIndicator.classList.remove('indicator-active'); listeningIndicator.classList.add('indicator-inactive'); } };
+        clearBtn.onclick = () => { /* ... clear output ... */ outputDiv.innerHTML = '<p><em>(Transcribed text will appear here...)</em></p>'; currentParagraph = null; clearBtn.disabled = true; console.log('Transcript cleared'); };
+        languageSelect.onchange = () => { /* ... update selectedLanguage ... */ selectedLanguage = languageSelect.value; console.log('Language changed to:', selectedLanguage); /* Language is applied on next start */ };
+
+
+        // --- Helper Functions ---
+        // updateOutput, finalizeCurrentParagraph, finalizeCurrentParagraphOnError, setStatus remain the same
+        function updateOutput(text, isInterim) { /* ... create/update paragraph, toggle interim class ... */ if (!text && isInterim) return; if (!currentParagraph) { currentParagraph = document.createElement('p'); const placeholder = outputDiv.querySelector('em'); if (placeholder && outputDiv.children.length === 1 && outputDiv.firstChild === placeholder.parentElement) { outputDiv.innerHTML = ''; } outputDiv.appendChild(currentParagraph); console.log("Created new paragraph"); } currentParagraph.textContent = text; if (isInterim) { currentParagraph.classList.add('interim'); } else { currentParagraph.classList.remove('interim'); console.log("Finalized paragraph content:", text); } }
+        function finalizeCurrentParagraph() { /* ... remove interim class, nullify ref, enable clearBtn ... */ if (currentParagraph && currentParagraph.classList.contains('interim')) { currentParagraph.classList.remove('interim'); console.log("Finalized paragraph on stop/end"); } currentParagraph = null; clearBtn.disabled = (outputDiv.textContent.trim() === '' || !!outputDiv.querySelector('em')); }
+        function finalizeCurrentParagraphOnError(errorType) { /* ... remove interim class, nullify ref, enable clearBtn ... */ if (currentParagraph && currentParagraph.classList.contains('interim')) { currentParagraph.classList.remove('interim'); console.log(`Finalized paragraph on error: ${errorType}`); } currentParagraph = null; clearBtn.disabled = (outputDiv.textContent.trim() === '' || !!outputDiv.querySelector('em')); }
+        function setStatus(message) { statusDiv.textContent = `Status: ${message}`; }
+
+    </script>
+
+</body>
+</html>
